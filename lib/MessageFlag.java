@@ -10,6 +10,8 @@ public class MessageFlag {
 	public static final String BANK_WIT = "WIT";	// bank withdrawl (collector)
 	public static final String C_INIT = "INIC";	// collector init with dir
 	public static final String A_INIT = "INIA";	// analyst init with dir
+	public static final String D_UDP = "DIR";	// director UDP broadcast flag
+	public static final String B_UDP = "BANK";	// bank UDP broadcast flag
 	public static final String EXAM_REQ = "DOIT";	// analysis request
 	public static final String PUB_KEY = "PUBK";	// key request
 	public static final String PUB_AUT = "PUBA";	// public key authentication (collector<->bank)

@@ -1,6 +1,7 @@
 import java.io.IOException;
 import java.security.*;
 import javax.net.ssl.*;
+import java.net.*;
 
 import lib.*;
 
@@ -21,6 +22,8 @@ public class Analyst extends Node {
 	private PrivateKey private_key;
 	private PublicKey public_key;
 
+	private boolean bankConn, dirConn;
+
 	private boolean socketIsListening = true;
 
 	private int myPort;
@@ -32,13 +35,21 @@ public class Analyst extends Node {
 	}
 
 	public Analyst() {
+
+		dirConn = false;
+		bankConn = false;
+
 		set_type("ANALYST-"+analyst_type);
 		SSLHandler.declareDualCert("SSL_Certificate","cits3002");
+
+		getServers();
+	}
+
+	private void start(){		// start main analyst process
+
 		if(!getKeysFromBank()){
 			ANNOUNCE("Could not retrieve Keypair from Bank.");
-
 		}
-
 
 		if (this.startSocket(0)) {
 
@@ -57,7 +68,51 @@ public class Analyst extends Node {
 				}
 			}
 		}
+	}
 
+	private void getServers(){	// get bank/dir listening address/port
+		while(!bankConn || !dirConn){
+			startUDP();
+		}
+		start();
+	}
+
+	private void startUDP(){
+		try{
+			DatagramSocket socket = new DatagramSocket(1566);
+
+			byte[] data = new byte[1024];
+			DatagramPacket datagram = new DatagramPacket(data, data.length);
+
+			socket.receive(datagram);
+
+			Message packet= new Message(new String(datagram.getData(), 0, datagram.getLength(), "utf-8"));
+
+			switch (packet.getFlagEnum()) {
+				case DIR:
+					ALERT("Recieved Address:Port UDP from Director");
+					directorIPAddress = packet.data.split(";")[0];
+					dirPort = Integer.parseInt(packet.data.split(";")[1]);
+
+					dirConn = true;
+					break;
+				case BANK:
+					ALERT("Recieved Address:Port UDP from Bank");
+					bankIPAddress = packet.data.split(";")[0];
+					bankPort = Integer.parseInt(packet.data.split(";")[1]);
+
+					bankConn = true;
+					break;
+			}
+			if(packet==null){
+				ALERT("UDP: Error listening for Bank/Director address and port...");
+			}
+			socket.close();
+		}catch (SocketException e){
+			ALERT("Error creating socket to listen on: Port 1566 in use");
+		}catch (IOException e){
+			ALERT("Error receiving datagram from UDP server");
+		}
 	}
 
 	public boolean startSocket(int portNo) {

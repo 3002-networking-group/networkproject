@@ -2,6 +2,7 @@ import java.io.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.*;
+import java.net.*;
 
 import javax.net.ssl.*;
 
@@ -59,10 +60,13 @@ public class Director extends Node {
 		ANNOUNCE("Starting director server");
 
 		// Start Server and listen
-		if (this.startSocket(portNo)) {
+		if (this.startSocket(0)) {
+
+			executorService.execute(new DirectorUDP());	// start UDP server to broadcast assigned port and IP
 
 			while (this.socketIsListening) {
 				try {
+
 					SSLSocket clientSocket = (SSLSocket) director.accept();
 					executorService.execute(new DirectorClient(clientSocket));
 
@@ -293,4 +297,45 @@ public class Director extends Node {
 		}
 	}
 
+	public class DirectorUDP implements Runnable {
+		private DatagramSocket socket;
+
+		public DirectorUDP(){
+			try{
+				socket = new DatagramSocket(0);		// dynammically allocate any port for broadcasting
+			}catch (SocketException e){
+				ALERT("Could not establish UDP broadcast server");
+			}
+		}
+		public void run(){
+			while(true){
+				try{
+					String tmp = MessageFlag.D_UDP + ":" + getIPAddress() + ";" + director.getLocalPort();
+					byte[] message = tmp.getBytes("utf-8");		// encode msg into utf-8 byte array
+
+					InetAddress address = InetAddress.getByName("255.255.255.255");		// get broadcast address
+
+					DatagramPacket packet = new DatagramPacket(message, message.length, address, 1566);	// port 1566 is listening port
+					socket.send(packet);
+
+					////////////////// REBROADCAST EVERY X SECONDS ////////////////////
+					try{
+						System.out.println("SENT UDP -------------");
+						Thread.sleep(5000);	// 5 sec
+					}
+					catch (Exception e){}
+				} catch (UnsupportedEncodingException e){
+					ALERT("Unsupported encoding: " + e);
+				}
+				catch (UnknownHostException e){
+					ALERT("Unknown UDP host: " + e);
+				}
+				catch (IOException e){
+					ALERT("UDP IO Exception sending broadcast packet");
+				}
+
+			}
+		}
+
+	}
 }

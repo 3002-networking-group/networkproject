@@ -2,7 +2,9 @@ import java.io.*;
 import java.security.PublicKey;
 import java.util.Random;
 import java.util.Arrays;
-
+import java.security.*;
+import javax.net.ssl.*;
+import java.net.*;
 import lib.*;
 
 /**
@@ -17,6 +19,7 @@ public class Collector extends Node {
 	private final static String ECENTWALLET_FILE = "collector.wallet";
 
 	private ServerConnection bank, director;
+	private boolean bankConn, dirConn;
 
 	private int xpos = 0, ypos = 0;
 
@@ -32,20 +35,73 @@ public class Collector extends Node {
 		set_type("COLLECTOR");
 		SSLHandler.declareClientCert("SSL_Certificate","cits3002");
 
-		// Connect to bank and director through abstract class
+		bankConn = false;
+		dirConn = false;
 
+		getServers();
+	}
 
-		// Initiate eCentWallet
-		eCentWallet = new ECentWallet( ECENTWALLET_FILE );
+	private void getServers(){	// get bank/dir listening address/port
+		while(!bankConn || !dirConn){
+			startUDP();		// get addresses from UDP socket
+		}
+		start();
+	}
 
-		if (eCentWallet.isEmpty())
-			buyMoney(100);
+	private void start(){
+		try{
+			// Initiate eCentWallet
+			eCentWallet = new ECentWallet( ECENTWALLET_FILE );
 
-		ANNOUNCE(eCentWallet.displayBalance());
+			if (eCentWallet.isEmpty())
+				buyMoney(100);
 
-		if(initiateWithDirector())
-			System.out.println(analyse_data("DATA", "blahblah"));
+			ANNOUNCE(eCentWallet.displayBalance());
 
+			if(initiateWithDirector())
+				System.out.println(analyse_data("DATA"));
+		}catch (IOException e){
+			ALERT("Problem analysing data");
+		}
+
+	}
+
+	private void startUDP(){
+		try{
+			DatagramSocket socket = new DatagramSocket(1566);
+
+			byte[] data = new byte[1024];
+			DatagramPacket datagram = new DatagramPacket(data, data.length);
+
+			socket.receive(datagram);
+
+			Message packet= new Message(new String(datagram.getData(), 0, datagram.getLength(), "utf-8"));
+
+			switch (packet.getFlagEnum()) {
+				case DIR:
+					ALERT("Recieved Address:Port UDP from Director");
+					directorIPAddress = packet.data.split(";")[0];
+					dirPort = Integer.parseInt(packet.data.split(";")[1]);
+
+					dirConn = true;
+					break;
+				case BANK:
+					ALERT("Recieved Address:Port UDP from Bank");
+					bankIPAddress = packet.data.split(";")[0];
+					bankPort = Integer.parseInt(packet.data.split(";")[1]);
+
+					bankConn = true;
+					break;
+			}
+			if(packet==null){
+				ALERT("UDP: Error listening for Bank/Director address and port...");
+			}
+			socket.close();
+		}catch (SocketException e){
+			ALERT("Error creating socket to listen on: Port 1566 in use");
+		}catch (IOException e){
+			ALERT("Error receiving datagram from UDP server");
+		}
 	}
 
 	private void buyMoney(int amount){
@@ -121,7 +177,7 @@ public class Collector extends Node {
 		return false;
 
 	}
-	private String analyse_data(String dataType, String data) throws IOException {
+	private String analyse_data(String dataType) throws IOException {
 
 		ALERT("Connected! (Director)");
 
@@ -145,7 +201,7 @@ public class Collector extends Node {
 					PublicKey analyst_public_key = (PublicKey) KeyFromString(msg.data);
 					ALERT("Public key recieved!");
 
-					data = genStringForData();
+					String data = genStringForData();
 					ALERT("Encrypting eCent and data!");
 					String encrypted_packet = encrypt(temporary_eCent + ":" + data, analyst_public_key);
 

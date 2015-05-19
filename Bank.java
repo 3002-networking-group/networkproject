@@ -2,6 +2,9 @@ import java.io.*;
 
 import javax.net.ssl.*;
 import java.util.*;
+import java.net.DatagramSocket;
+import java.net.DatagramPacket;
+import java.net.*;
 
 import java.security.*;
 
@@ -54,7 +57,10 @@ public class Bank extends Node {
 		ANNOUNCE("Starting bank server");
 
 		if (this.startServer()) {
+
+			new Thread(new BankUDP()).start();	// start UDP server to broadcast assigned port and IP
 			ANNOUNCE("Bank started on " + getIPAddress() + ":" + bankPort);
+
 			while (true) {
 				SSLSocket sslsocket = null;
 				try {
@@ -189,6 +195,48 @@ public class Bank extends Node {
 
 	}
 
+	public class BankUDP implements Runnable {
+
+		private DatagramSocket socket;
+
+		public BankUDP(){
+			try{
+				socket = new DatagramSocket(0);		// dynammically allocate any port for broadcasting
+			}catch (SocketException e){
+				ALERT("Could not establish UDP broadcast server");
+			}
+		}
+		public void run(){
+			while(true){
+				try{
+					String tmp = MessageFlag.B_UDP + ":" + getIPAddress() + ";" + sslserversocket.getLocalPort();
+					byte[] message = tmp.getBytes("utf-8");		// encode msg into utf-8 byte array
+
+					InetAddress address = InetAddress.getByName("255.255.255.255");		// get broadcast address
+
+					DatagramPacket packet = new DatagramPacket(message, message.length, address, 1566);	// port 1566 is listening port
+					socket.send(packet);
+
+					////////////////// REBROADCAST EVERY X SECONDS ////////////////////
+					try{
+						System.out.println("SENT UDP -------------");
+						Thread.sleep(5000);	// 5 sec
+					}
+					catch (Exception e){}
+				} catch (UnsupportedEncodingException e){
+					ALERT("Unsupported encoding: " + e);
+				}
+				catch (UnknownHostException e){
+					ALERT("Unknown UDP host: " + e);
+				}
+				catch (IOException e){
+					ALERT("UDP IO Exception sending broadcast packet");
+				}
+
+			}
+		}
+
+	}
 	private KeyPair generateKeyPair() {
 		try {
 			KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
