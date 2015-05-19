@@ -99,7 +99,28 @@ public class Collector extends Node {
 
         	return result != null;
 	}
+	// Verify a public key from Director was issued by bank (must be from analyst)
+	private boolean verifyPubKey(String pubKey){
+		try{
+			bank = new ServerConnection(bankIPAddress, bankPort);
 
+			Message result = new Message(bank.request(MessageFlag.PUB_AUT + ":" + pubKey));
+
+			bank.close();
+
+			switch(result.getFlagEnum()) {
+				case VALID:
+					ALERT("Analyst public key verified.");
+					return true;
+				case INVALID:
+					return false;
+			}
+		}catch (IOException err) {
+			ALERT_WITH_DELAY("Could not verify Public Key");
+		}
+		return false;
+
+	}
 	private String analyse_data(String dataType, String data) throws IOException {
 
 		ALERT("Connected! (Director)");
@@ -119,47 +140,52 @@ public class Collector extends Node {
 			Message msg = new Message(director.receive());
 
 			if(msg.getFlag() == MessageFlag.PUB_KEY) {
-				PublicKey analyst_public_key = (PublicKey) KeyFromString(msg.data);
-				ALERT("Public key recieved!");
 
-				ALERT("Collecting dicsk for analysis..");
-				data = genStringForData();
-				ALERT("Encrypting eCent and data!");
-				String encrypted_packet = encrypt(temporary_eCent + ":" + data, analyst_public_key);
+				if(verifyPubKey(msg.data)){
+					PublicKey analyst_public_key = (PublicKey) KeyFromString(msg.data);
+					ALERT("Public key recieved!");
 
-				// send encrypted eCent + data
-				ALERT("Sending Encrypted Packet!");
-				director.send(encrypted_packet);
+					data = genStringForData();
+					ALERT("Encrypting eCent and data!");
+					String encrypted_packet = encrypt(temporary_eCent + ":" + data, analyst_public_key);
 
-				Message analysis = new Message (director.receive());
-				ALERT("Receiving response...");
+					// send encrypted eCent + data
+					ALERT("Sending Encrypted Packet!");
+					director.send(encrypted_packet);
 
-				// VALID - Valid result returned
-				// RET - Analyst dc before depositing ecent (returnable)
-				// INVALID - Invalid Ecent sent (by collector)
-				// FAIL - No analysts left in pool (try again later)
-				// ERROR - Analyst dc after depositing ecent (invalid/lost)
-				switch (analysis.getFlagEnum()) {
-					case VALID:		// valid result
-						ALERT("Response recieved!");
-						director.close();
-						return analysis.data;
-					case DUP:
-						ALERT("Duplicate Ecent!!! Check wallet integrity");
-						break;
-					case RET:
-						ALERT("Analyst disconnected before depositing Ecent, returning to wallet.");
-						eCentWallet.add(temporary_eCent,true);
-						break;
-					case INVALID:
-						ALERT("Invalid Ecent sent from Wallet, check wallet integrity.");
-						break;
-					case FAIL:
-						ALERT("Could not connect to analyst.");
-						break;
-					case ERROR:
-						ALERT("Analyst disconnected after depositing Ecent. Ecent lost.");
-						break;
+					Message analysis = new Message (director.receive());
+					ALERT("Receiving response...");
+
+					// VALID - Valid result returned
+					// DUP - Duplicate Ecent sent
+					// RET - Analyst dc before depositing ecent (returnable)
+					// INVALID - Invalid Ecent sent (by collector)
+					// FAIL - No analysts left in pool (try again later)
+					// ERROR - Analyst dc after depositing ecent (invalid/lost)
+					switch (analysis.getFlagEnum()) {
+						case VALID:
+							ALERT("Response recieved!");
+							director.close();
+							return analysis.data;
+						case DUP:
+							ALERT("Duplicate Ecent!!! Check wallet integrity");
+							break;
+						case RET:
+							ALERT("Analyst disconnected before depositing Ecent, returning to wallet.");
+							eCentWallet.add(temporary_eCent,true);
+							break;
+						case INVALID:
+							ALERT("Invalid Ecent sent from Wallet, check wallet integrity.");
+							break;
+						case FAIL:
+							ALERT("Could not connect to analyst.");
+							break;
+						case ERROR:
+							ALERT("Analyst disconnected after depositing Ecent. Ecent lost.");
+							break;
+					}
+				}else{
+					ALERT("Public Key not verified! Check director authenticity");
 				}
 			}
 			director.close();

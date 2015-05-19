@@ -2,6 +2,7 @@ import java.io.*;
 
 import javax.net.ssl.*;
 import java.util.*;
+
 import java.security.*;
 
 import lib.*;
@@ -22,6 +23,8 @@ public class Bank extends Node {
 
 	private static ECentWallet bankStore;
 	private static HashSet<String> depositedEcent;
+	private static HashSet<String> validKeys;
+
 	private final static String ECENTWALLET_FILE = "bank.wallet";
 
 	/**
@@ -46,6 +49,7 @@ public class Bank extends Node {
 
 		bankStore = new ECentWallet(ECENTWALLET_FILE);
 		depositedEcent = new HashSet();
+		validKeys = new HashSet();
 
 		ANNOUNCE("Starting bank server");
 
@@ -149,21 +153,33 @@ public class Bank extends Node {
 
 							KeyPair keys = generateKeyPair();
 
-							System.out.println(keys.getPublic().getFormat());
+							validKeys.add(StringFromKey(keys.getPublic()));		// add to set of valid keys
+
 							client.send(StringFromKey(keys.getPublic()));
+
 							client.send(StringFromKey(keys.getPrivate()));
+
 							client.close();
 
 							ALERT("Keypair Sent");
 
 							break;
 
+						case PUBA:
+							ALERT("Collector requesting key verification");
+
+							if(validKeys.contains(msg.data)){
+								client.send(MessageFlag.VALID);
+							}else{
+								client.send(MessageFlag.INVALID);
+							}
+							client.close();
+							break;
 						default:
 							ALERT("Unexpected input: " + msg.raw());
 							break;
 
 					}
-
 					ALERT("Request finished!");
 				} catch(IOException err) {
 					ALERT("Closing connection");

@@ -161,11 +161,11 @@ public class Director extends Node {
 						ALERT("Collector sending request...");
 						ALERT("Data Analysis request recieved");
 						boolean success = false;
-
 						boolean stillBusy = true;
 
 						while(stillBusy){	// while theres still busy analysts left
 							synchronized(analystPool){	// lock analyst pool
+								synchronized(busyAnalyst){
 
 								HashMap<String,String> datatype_analysts = analystPool.get(msg_data[DATA_TYPE]);
 
@@ -180,7 +180,7 @@ public class Director extends Node {
 									// Try some analyst until you find one that's free and connected
 									for (String analystKey : datatype_analysts.keySet()) {
 
-										if (!busyAnalyst.contains(analystKey)) {
+										if (!busyAnalyst.contains(analystKey) && !success) {
 											String a = datatype_analysts.get(analystKey);
 
 											analyst = new ServerConnection(a.split(":")[0], Integer.parseInt(a.split(":")[1]));
@@ -189,9 +189,9 @@ public class Director extends Node {
 
 												try{	// try block BEFORE the ecent is deposited
 													//
-													synchronized(busyAnalyst){	// Reserve the analyst and lock busyAnalyst set
+														// Reserve the analyst and lock busyAnalyst set
 														busyAnalyst.add(analystKey);
-													}
+
 
 													ALERT("Analyst found! Sending Collector the analyst public key...");
 													String packet = client.request(MessageFlag.PUB_KEY + ":" + analystKey);
@@ -235,11 +235,13 @@ public class Director extends Node {
 													client.send(MessageFlag.VALID + ":" + result);
 
 													ALERT("Result returned to Collector");
+													ALERT("i love balls");
 													success = true;
+													stillBusy = false;
 
-													synchronized(busyAnalyst){
+													//synchronized(busyAnalyst){
 														busyAnalyst.remove(analystKey);
-													}
+													//}
 
 												} catch (IOException err)
 												{
@@ -259,12 +261,11 @@ public class Director extends Node {
 									if(numBusy==0 || success) stillBusy = false;	// no busy analysts left or success = break while loop
 
 									if(!disconnected_analysts.isEmpty()){		// remove disconnected analysts from pool
-									//	synchronized(analystPool){		// sync/lock analyst pool
 											for(String s : disconnected_analysts){
 												analystPool.get(msg_data[DATA_TYPE]).remove(s);
 											}
-									//	}
 									}
+								}
 								}
 							}
 						}

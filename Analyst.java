@@ -175,7 +175,7 @@ public class Analyst extends Node {
 						//////////////////////SLEEP BLOCK///////////////////////
 						try{
 							System.out.println("SLEEPING BEFORE DEPOSIT...");
-							Thread.sleep(3500);	// 3.5 sec
+							Thread.sleep(1000);	// 3.5 sec
 						}
 						catch (Exception e){}
 						//////////////////////////////////////////////////////////
@@ -193,14 +193,13 @@ public class Analyst extends Node {
 								/////////////////////////SLEEP BLOCK//////////////////////
 								try{
 									System.out.println("SLEEPING AFTER DEPOSIT...");
-									Thread.sleep(3500);	// 3.5 sec
+									Thread.sleep(1000);	// 3.5 sec
 								}
 								catch (Exception e){}
 								//////////////////////////////////////////////////////////
 
-								ALERT("Performing ANALYSIS of dicks");
-								String result = performLCS(data); // analyse LCS here
 
+								String result = performLCS(data); // analyse LCS here
 
 								director.send( result );
 								ALERT("Analysis sent!");
@@ -222,54 +221,46 @@ public class Analyst extends Node {
 				ALERT("Error: Could not recieve message from Director");
 
 			}
+	}
 
+	// Perform Longest Common Subsequence algorithm on string
+
+	private String performLCS (String data) {
+		String[] parts = data.split("-");
+		String pattern = parts[0];
+		String randomString = parts[1];
+
+		int M = pattern.length();
+		int N = randomString.length();
+
+		// opt[i][j] = length of LCS of x[i..M] and y[j..N]
+		int[][] opt = new int[M+1][N+1];
+
+		for (int i = M-1; i >= 0; i--) {
+			for (int j = N-1; j >= 0; j--) {
+				if (pattern.charAt(i) == randomString.charAt(j))
+				opt[i][j] = opt[i+1][j+1] + 1;
+				else
+				opt[i][j] = Math.max(opt[i+1][j], opt[i][j+1]);
+			}
 		}
-		private String performLCS (String data) {
 
-		    // Split String x here..
+		String lcsString = new String();
+		int i = 0, j = 0;
 
-		    // string- "ds:dsa:xx"
-				// string.split(":") = {"ds","dsa","xx"}
-				// string.split(":")[0] = "ds"
-
-
-				String[] parts = data.split("-");
-				String pattern = parts[0];
-				String randomString = parts[1];
-
-		    int M = pattern.length();
-		    int N = randomString.length();
-
-		    // opt[i][j] = length of LCS of x[i..M] and y[j..N]
-		    int[][] opt = new int[M+1][N+1];
-
-		    for (int i = M-1; i >= 0; i--) {
-		      for (int j = N-1; j >= 0; j--) {
-		        if (pattern.charAt(i) == randomString.charAt(j))
-		          opt[i][j] = opt[i+1][j+1] + 1;
-		        else
-		          opt[i][j] = Math.max(opt[i+1][j], opt[i][j+1]);
-		      }
-		    }
-
-		    String lcsString = new String();
-
-		    int i = 0, j = 0;
-
-		    while(i < M && j < N) {
-		      if (pattern.charAt(i) == randomString.charAt(j)) {
-		        // build the LCS
-		        lcsString += Character.toString(pattern.charAt(i));
-		        i++;
-		        j++;
-		    } else if (opt[i+1][j] >= opt[i][j+1])
-		        i++;
-		      else
-		        j++;
-		    }
-
-		    return lcsString;
+		while(i < M && j < N) {
+		if (pattern.charAt(i) == randomString.charAt(j)) {
+			// build the LCS
+			lcsString += Character.toString(pattern.charAt(i));
+			i++;
+			j++;
+		} else if (opt[i+1][j] >= opt[i][j+1])
+			i++;
+		else
+			j++;
 		}
+		return lcsString;
+	}
 
 
 }
