@@ -10,7 +10,7 @@ package lib;
 
 public class Message {
 
-	public enum Flag { NONE, INIC, INIA, DOIT, WIT, DEP, PUBK, INVALID, VALID, RET, FAIL, ERROR };
+	public enum Flag { NONE, INIC, INIA, DOIT, WIT, DEP, DUP, PUBK, INVALID, VALID, RET, FAIL, ERROR };
 	private Flag flag; 			// flag cannot be changed
 	public String data; 			// contents can be referenced Message.content
 

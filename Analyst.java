@@ -124,24 +124,30 @@ public class Analyst extends Node {
 		return response.equals("REGISTERED");
 	}
 
-	private boolean depositMoney(String eCent) {
+	private int depositMoney(String eCent) { // return 1 if valid ecent deposited, 0 if it's a duplicate (valid but copy)
+	 					//   -1 for invalid ecent hash and 2 for bank connection
+
 		ALERT("Sending eCent to the bank");
 
 		String deposit_request = MessageFlag.BANK_DEP + ":" + eCent;
-		String result = null;
+		Message result;
 
 		try {
 			bank = new ServerConnection(bankIPAddress, bankPort);
-			result = bank.request(deposit_request);
+			result = new Message(bank.request(deposit_request));
 			bank.close();
 		} catch (IOException err) {
-			ALERT_WITH_DELAY("Error depositing to bank.");
-			return false;
+			return 2;	// 2 - error depositing in bank
 		}
-
-		System.out.println(result);
-		System.out.println(MessageFlag.VALID);
-		return result.equals(MessageFlag.VALID);
+		switch (result.getFlagEnum()) {
+			case VALID:
+				return 1;
+			case INVALID:
+				return -1;
+			case DUP:
+				return 0;
+		}
+		return -1;
 	}
 
 	private void run(SSLSocket clientSocket) {
@@ -166,31 +172,46 @@ public class Analyst extends Node {
 						String eCent = decrypted_packet.split(":")[0];
 						String data = decrypted_packet.split(":")[1];
 
+						//////////////////////SLEEP BLOCK///////////////////////
 						try{
 							System.out.println("SLEEPING BEFORE DEPOSIT...");
-							Thread.sleep(10000);
+							Thread.sleep(3500);	// 3.5 sec
 						}
 						catch (Exception e){}
+						//////////////////////////////////////////////////////////
 
-						if (depositMoney(eCent)) {
+						switch(depositMoney(eCent)) {
+							case 2:
+								director.send(MessageFlag.RET_CENT);
+								ALERT_WITH_DELAY("Error depositing to bank.");
+								break;
+							case 1:
+								director.send(MessageFlag.VALID);
 
-							director.send(MessageFlag.VALID);
+								ALERT("Payment deposited!");
 
-							ALERT("Payment deposited!");
+								/////////////////////////SLEEP BLOCK//////////////////////
+								try{
+									System.out.println("SLEEPING AFTER DEPOSIT...");
+									Thread.sleep(3500);	// 3.5 sec
+								}
+								catch (Exception e){}
+								//////////////////////////////////////////////////////////
 
-							ALERT("Analysing...");
-							String result = data + "good"; // analyse LCS here
+								String result = data + "good"; // analyse LCS here
 
-							ALERT("...complete!");
-
-							director.send( result );
-							ALERT("Analysis sent!");
-
-						} else {
-							director.send(MessageFlag.INVALID);
-							ALERT("Error: Could not deposit eCent!");
+								director.send( result );
+								ALERT("Analysis sent!");
+								break;
+							case -1:
+								director.send(MessageFlag.INVALID);
+								ALERT("Error: Could not deposit eCent: Invalid Ecent");
+								break;
+							case 0:
+								director.send(MessageFlag.DUP);
+								ALERT("Error: Duplicate Ecent.");
+								break;
 						}
-
 					}
 				}
 				director.close();

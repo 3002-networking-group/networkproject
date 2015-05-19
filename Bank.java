@@ -21,6 +21,8 @@ public class Bank extends Node {
 	private static SSLServerSocket sslserversocket = null;
 
 	private static ECentWallet bankStore;
+	private static HashSet<String> depositedEcent;
+	private static
 	private final static String ECENTWALLET_FILE = "bank.wallet";
 
 	/**
@@ -44,6 +46,7 @@ public class Bank extends Node {
 		SSLHandler.declareServerCert("SSL_Certificate", "cits3002");
 
 		bankStore = new ECentWallet(ECENTWALLET_FILE);
+		depositedEcent = new HashSet();
 
 		ANNOUNCE("Starting bank server");
 
@@ -118,19 +121,26 @@ public class Bank extends Node {
 						case DEP:
 							ALERT("Analyst connected  -->  Depositing money");
 
-							// Check if eCent is in valid eCent set
-							if (bankStore.contains(msg.data)) {
 
-								ALERT("Depositing valid eCent");
-								ALERT("Sending acknowledgement to Analyst!");
-								client.send(MessageFlag.VALID);
-								bankStore.remove(msg.data);
+							if(!depositedEcent.contains(msg.data)){	  // check if it's not duplicate
+								if (bankStore.contains(msg.data)) { // Check if eCent is in valid eCent set
 
+									ALERT("Depositing valid eCent");
+									ALERT("Sending acknowledgement to Analyst!");
+									client.send(MessageFlag.VALID);
+									depositedEcent.add(msg.data);
+									bankStore.remove(msg.data);
+
+
+								} else {
+
+									ALERT("Rejecting invalid eCent");
+									client.send(MessageFlag.INVALID);
+
+								}
 							} else {
-
-								ALERT("Rejecting invalid eCent");
-								client.send(MessageFlag.INVALID);
-
+								ALERT("Duplicate Ecent");
+								client.send(MessageFlag.DUP);
 							}
 							client.close();
 							break;

@@ -142,7 +142,9 @@ public class Collector extends Node {
 						ALERT("Response recieved!");
 						director.close();
 						return analysis.data;
-
+					case DUP:
+						ALERT("Duplicate Ecent!!! Check wallet integrity");
+						break;
 					case RET:
 						ALERT("Analyst disconnected before depositing Ecent, returning to wallet.");
 						eCentWallet.add(temporary_eCent,true);

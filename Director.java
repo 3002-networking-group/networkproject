@@ -165,89 +165,105 @@ public class Director extends Node {
 						boolean stillBusy = true;
 
 						while(stillBusy){	// while theres still busy analysts left
+							synchronized(analystPool){	// lock analyst pool
 
-							// Get list of analysts for this data type
-							HashMap<String,String> datatype_analysts = analystPool.get(msg_data[DATA_TYPE]);
-							HashSet<String> disconnected_analysts = new HashSet();	// temp hashSet of analyst who fail to connect this session
-							int numBusy = 0;
+								HashMap<String,String> datatype_analysts = analystPool.get(msg_data[DATA_TYPE]);
 
-							// If there are some analysts
-							if (datatype_analysts != null) {
+								// Get list of analysts for this data type
 
-								// Try some analyst until you find one that's free and connected
-								for (String analystKey : datatype_analysts.keySet()) {
+								HashSet<String> disconnected_analysts = new HashSet();	// temp hashSet of analyst who fail to connect this session
+								int numBusy = 0;
 
-									if (!busyAnalyst.contains(analystKey)) {
-										String a = datatype_analysts.get(analystKey);
+								// If there are some analysts
+								if (datatype_analysts != null) {
 
-										analyst = new ServerConnection(a.split(":")[0], Integer.parseInt(a.split(":")[1]));
+									// Try some analyst until you find one that's free and connected
+									for (String analystKey : datatype_analysts.keySet()) {
 
-										if(analyst.connected){
+										if (!busyAnalyst.contains(analystKey)) {
+											String a = datatype_analysts.get(analystKey);
 
-											try{	// try block BEFORE the ecent is deposited
-												//
-												synchronized(busyAnalyst){	// Reserve the analyst and lock busyAnalyst set
-													busyAnalyst.add(analystKey);
-												}
+											analyst = new ServerConnection(a.split(":")[0], Integer.parseInt(a.split(":")[1]));
 
-												ALERT("Analyst found! Sending Collector the analyst public key...");
-												String packet = client.request(MessageFlag.PUB_KEY + ":" + analystKey);
-												String data, result = null;
+											if(analyst.connected){
 
-												// Send eCent and data, and request eCent deposit verification
-												data = MessageFlag.EXAM_REQ + ":" + packet;
-												boolean returnable = true;
+												try{	// try block BEFORE the ecent is deposited
+													//
+													synchronized(busyAnalyst){	// Reserve the analyst and lock busyAnalyst set
+														busyAnalyst.add(analystKey);
+													}
 
-												String depCon = analyst.request(data);	// deposit confirmation
-												if(depCon.equals(MessageFlag.VALID)) returnable = false;
-												else{
-													ALERT("Ecent Invalid - Informing Collector");
-													client.send(MessageFlag.INVALID);
+													ALERT("Analyst found! Sending Collector the analyst public key...");
+													String packet = client.request(MessageFlag.PUB_KEY + ":" + analystKey);
+													String data, result = null;
+
+													// Send eCent and data, and request eCent deposit verification
+													data = MessageFlag.EXAM_REQ + ":" + packet;
+													boolean returnable = true;
+
+													Message depCon = new Message(analyst.request(data));	// deposit confirmation
+													if(depCon.getFlag().equals(MessageFlag.VALID)) returnable = false;
+													else{
+														switch (depCon.getFlagEnum()) {
+															case INVALID:
+																ALERT("Ecent Invalid - Informing Collector");
+																client.send(MessageFlag.INVALID);
+																break;
+															case DUP:
+																ALERT("Ecent duplicate - Informing Collector");
+																client.send(MessageFlag.DUP);
+																break;
+															case RET:
+																ALERT("Ecent deposit failed - Returnable Ecent");
+																client.send(MessageFlag.RET_CENT);
+																break;
+														}
+														break;	// break loop (bad ecent)
+													}
+
+												} catch (IOException err)
+												{
+													System.out.println("Error with Analyst before Ecent deposited.");
+													client.send(MessageFlag.RET_CENT);	// return RET flag to indicate ecent still valid
 													break;
 												}
 
-											} catch (IOException err)
-											{
-												System.out.println("Error with Analyst before Ecent deposited.");
-												client.send(MessageFlag.RET_CENT);	// return RET flag to indicate ecent still valid
-												break;
-											}
+												try{	// try block AFTER Ecent is deposited
+													String result = analyst.receive();
+													ALERT("Result recieved from Analyst");
 
-											try{	// try block AFTER Ecent is deposited
-												String result = analyst.receive();
-												ALERT("Result recieved from Analyst");
+													client.send(MessageFlag.VALID + ":" + result);
 
-												client.send(MessageFlag.VALID + ":" + result);
+													ALERT("Result returned to Collector");
+													success = true;
 
-												ALERT("Result returned to Collector");
-												success = true;
+													synchronized(busyAnalyst){
+														busyAnalyst.remove(analystKey);
+													}
 
-												synchronized(busyAnalyst){
-													busyAnalyst.remove(analystKey);
+												} catch (IOException err)
+												{
+													System.out.println("Error with Analyst after Ecent deposited.");
+													client.send(MessageFlag.ERROR);		// return ERROR flag to indicate lost ecent
+													break;
 												}
 
-											} catch (IOException err)
-											{
-												System.out.println("Error with Analyst after Ecent deposited.");
-												client.send(MessageFlag.ERROR);		// return ERROR flag to indicate lost ecent
-												break;
+											}else{
+												System.out.println("Connection failed: " + a + ", trying next one.");
+												disconnected_analysts.add(analystKey);
 											}
 
-										}else{
-											System.out.println("Connection failed: " + a + ", trying next one.");
-											disconnected_analysts.add(analystKey);
-										}
+										}else numBusy++;	// count analyst as busy (as opposed to dc)
+									}
 
-									}else numBusy++;	// count analyst as busy (as opposed to dc)
-								}
+									if(numBusy==0 || success) stillBusy = false;	// no busy analysts left or success = break while loop
 
-								if(numBusy==0 || success) stillBusy = false;	// no busy analysts left or success = break while loop
-
-								if(!disconnected_analysts.isEmpty()){		// remove disconnected analysts from pool
-									synchronized(analystPool){		// sync/lock analyst pool
-										for(String s : disconnected_analysts){
-											analystPool.get(msg_data[DATA_TYPE]).remove(s);
-										}
+									if(!disconnected_analysts.isEmpty()){		// remove disconnected analysts from pool
+									//	synchronized(analystPool){		// sync/lock analyst pool
+											for(String s : disconnected_analysts){
+												analystPool.get(msg_data[DATA_TYPE]).remove(s);
+											}
+									//	}
 									}
 								}
 							}
