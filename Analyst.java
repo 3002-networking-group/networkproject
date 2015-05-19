@@ -1,5 +1,6 @@
 import java.io.IOException;
 import java.security.*;
+import javax.net.ssl.*;
 
 import lib.*;
 
@@ -10,181 +11,196 @@ import lib.*;
  */
 
 public class Analyst extends Node {
-	
-	// The persistent connections
+
 	private ServerConnection bank, director;
 
-	// Analyst subtypes (add here)
-	private enum AnalystType { NAV, ORC }
-	private AnalystType analyst_type = AnalystType.NAV; // [navigator] or "ORC" [object response coordinator]
-	
-	// Local keys
+	private SSLServerSocket analyst;
+
+	private String analyst_type = "DATA"; // [navigator] or "ORC" [object response coordinator]
+
 	private PrivateKey private_key;
 	private PublicKey public_key;
 
-	/*
-	 * Main
-	 */
+	private boolean socketIsListening = true;
+
+	private int myPort;
+
 	public static void main(String[] args) {
 		load_ip_addresses(args);
+
 		new Analyst();
 	}
-	
 
 	public Analyst() {
-		set_type("ANALYST-"+analyst_type.name());
-		
-		this.generateKeyPair();
-		
+		set_type("ANALYST-"+analyst_type);
 		SSLHandler.declareDualCert("SSL_Certificate","cits3002");
-		
-		// Connect to bank and director through abstract class
-		bank = new ServerConnection(bankIPAddress, bankPort);
-		director = new ServerConnection(directorIPAddress, dirPort);
-		
-		//while(bank.connected && director.connected) {
-			if(registerWithDirector()){
+		if(!getKeysFromBank()){
+			ANNOUNCE("Could not retrieve Keypair from Bank.");
+
+		}
+
+
+		if (this.startSocket(0)) {
+
+			if(registerWithDirector())
 				ANNOUNCE("Registered!");
-				this.run();
-			}
 			else
-				ALERT_WITH_DELAY("Not connected to Director... retrying...");
-		//}
-		
+				ALERT_WITH_DELAY("Couldn't initialize with Director..");
+
+			while (this.socketIsListening) {
+				try {
+					SSLSocket clientSocket = (SSLSocket) analyst.accept();
+					this.run(clientSocket);
+
+				} catch (IOException err) {
+					System.err.println("Error connecting client " + err);
+				}
+			}
+		}
+
 	}
 
-	// Send data type to Director
-	private boolean registerWithDirector() {
-		ANNOUNCE("Registering availability with Director");
-		String register_message = MessageFlag.A_INIT + ":" + this.analyst_type + ";" + StringFromKey(this.public_key);
-		String response;
+	public boolean startSocket(int portNo) {
 		try {
-			response = director.request(register_message);
+			SSLServerSocketFactory sf;
+
+			sf = (SSLServerSocketFactory) SSLServerSocketFactory.getDefault();
+			analyst = (SSLServerSocket) sf.createServerSocket(portNo);
+
+			myPort = analyst.getLocalPort();
+
+			ANNOUNCE("Analyst started on " + getIPAddress() + ":" + myPort);
+
+			return true;
+
+		} catch (Exception error) {
+			System.err.println("Director failed to start: " + error);
+			System.exit(-1);
+
+			return false;
+		}
+	}
+
+	//Get certified encryption/decryption keypair from issuer (bank)
+	private boolean getKeysFromBank(){
+		ANNOUNCE("Retrieving Keypair from Bank..");
+
+		String keypair_request = MessageFlag.PUB_KEY;
+		String response;
+
+		try {
+			bank = new ServerConnection(bankIPAddress, bankPort);
+
+			response = bank.request(keypair_request);
+			public_key = (PublicKey) KeyFromString(response);
+
+			response = bank.receive();
+			private_key = (PrivateKey) PrivateKeyFromString(response);
+
+
+			bank.close();
 		} catch (IOException err) {
 			return false;
 		}
-		
+		if(public_key!=null && private_key!=null) {
+			return true;
+		}else return false;
+	}
+
+	// Send data type to Director
+	 // Analyst INIT packet = [ INITFLAG  :  DATA TYPE  ;  ADDRESS  ;  PORT ; PublicKey]
+	private boolean registerWithDirector() {
+		ANNOUNCE("Registering availability with Director");
+		String register_message = MessageFlag.A_INIT + ":" + this.analyst_type+";"+getIPAddress()+";"+Integer.toString(myPort)+";"+StringFromKey(this.public_key);
+		String response;
+		try {
+			director = new ServerConnection(directorIPAddress, dirPort);
+			response = director.request(register_message);
+			director.close();
+		} catch (IOException err) {
+			return false;
+		}
+
 		return response.equals("REGISTERED");
 	}
-	
+
 	private boolean depositMoney(String eCent) {
 		ALERT("Sending eCent to the bank");
-		
+
 		String deposit_request = MessageFlag.BANK_DEP + ":" + eCent;
 		String result = null;
-		
+
 		try {
+			bank = new ServerConnection(bankIPAddress, bankPort);
 			result = bank.request(deposit_request);
+			bank.close();
 		} catch (IOException err) {
 			ALERT_WITH_DELAY("Error depositing to bank.");
 			return false;
 		}
-				
-		return result.equals("VALID");
+
+		System.out.println(result);
+		System.out.println(MessageFlag.VALID);
+		return result.equals(MessageFlag.VALID);
 	}
-	
-	private void run() {
-		
-		while (true) {
-			ALERT("Awaiting request...");
+
+	private void run(SSLSocket clientSocket) {
+
 			try {
+				director =  new ServerConnection(clientSocket);
+
 				Message request = new Message(director.receive());
-				
+
 				ALERT("Receiving request!");
-				
+
 				if(request.getFlag().equals(MessageFlag.EXAM_REQ)) {
-					
-					String eCent = decrypt(request.data,private_key);
-					
-					if (eCent == null) {
-						ALERT("Error: Could not decrypt message! (" + eCent + ")");
+
+					String decrypted_packet = decrypt(request.data,private_key);
+
+					if (decrypted_packet == null) {
+						ALERT("Error: Could not decrypt message! (" + decrypted_packet + ")");
 					} else {
 						// Successful decryption
 						ALERT("Depositing payment!");
-						
+
+						String eCent = decrypted_packet.split(":")[0];
+						String data = decrypted_packet.split(":")[1];
+
+						try{
+							System.out.println("SLEEPING BEFORE DEPOSIT...");
+							Thread.sleep(10000);
+						}
+						catch (Exception e){}
+
 						if (depositMoney(eCent)) {
+
+							director.send(MessageFlag.VALID);
+
 							ALERT("Payment deposited!");
-	
+
 							ALERT("Analysing...");
-							String result = analyse(director.receive());
-							
+							String result = data + "good"; // analyse LCS here
+
 							ALERT("...complete!");
-							
+
 							director.send( result );
 							ALERT("Analysis sent!");
-							
+
 						} else {
-							director.send("Error: Could not deposit eCent!");
+							director.send(MessageFlag.INVALID);
 							ALERT("Error: Could not deposit eCent!");
 						}
-		
+
 					}
 				}
+				director.close();
 
 			} catch (IOException err) {
 				ALERT("Error: Could not recieve message from Director");
-				break;
+
 			}
-			
+
 		}
-	}
-	
-	private void generateKeyPair() {
-		try {
-			KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
-			keyGen.initialize(2048);
-			KeyPair pair = keyGen.generateKeyPair();
-			private_key = pair.getPrivate();
-			public_key = pair.getPublic();
-			
-		} catch (NoSuchAlgorithmException e) {
-			ANNOUNCE("ERROR: Error generating secure socket keys");
-			System.exit(-1);
-		}
-	}
-	
-	private String analyse(String rawdata) {
-		// Analyse data here
-		String[] data = rawdata.split(":");
-		
-		switch(analyst_type) {
-		
-			/**
-			 *  Navigator Analyst
-			 */
-			case NAV:
-				int[] start = extract_coordinates(data[0]);
-				int[] end = extract_coordinates(data[1]);
-				
-				// Write code here
-				// 	Path-finding (or generating)
-				// Access to:
-				//  start[x],start[y],end[x],end[y]
-				// Output should be a character array:
-				char[] instructions = {LEFT,DOWN,DOWN,DOWN,RIGHT,RIGHT,
-						RIGHT,DOWN,DOWN,LEFT,DOWN,DOWN};
-				
-				ALERT("Instructions encoded: " + new String(instructions));
-				
-				return new String(instructions);
-				
-			/**
-			 * Object Response Coordinator
-			 */
-			case ORC:
-				String object = data[0];
-				String size = data[1];
-				
-				if (object.equals("Unicorn") || size.equals("SMALL"))
-					return "LAZER";
-				else
-					return "MOVE";
-				
-			/**
-			 * Invalid analyst given
-			 */
-			default: // Invalid Analyst Type
-				return MessageFlag.ERROR;
-		}
-	}
+
+
 }

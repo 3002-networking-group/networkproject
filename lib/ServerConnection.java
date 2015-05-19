@@ -12,8 +12,10 @@ import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 
 /**
- * 
- * @author Reece Notargiacomo
+ * Server Connection Class for handling server/client socket connections,
+ * read/write buffers and input/output streams (and writing/reading to streams)
+ *
+ * @author Reece Notargiacomo, Jesse Fletcher, Caleb Fetzer, Alexander Popoff-Asotoff
  * @date 17th May
  *
  */
@@ -27,12 +29,12 @@ public class ServerConnection {
 	public String public_key;
 	private String ip;
 	private int port;
-	
+
 	public ServerConnection(SSLSocket socket) {
 		sslSocket = socket;
 		this.connected = startServer();
 	}
-	
+
 	public ServerConnection(String myip, int myport) {
 		ip = myip;
 		port = myport;
@@ -41,33 +43,33 @@ public class ServerConnection {
 			SSLSocketFactory sslsf = (SSLSocketFactory)SSLSocketFactory.getDefault();
 			sslSocket = (SSLSocket)sslsf.createSocket(ip, port);
 			this.connected = startServer();
-			
+
 		} catch (UnknownHostException e) {
 			System.err.println("No host found at "+ip+":"+port+".");
-			
+
 		} catch (IOException e) {
 			System.err.println("No listening host at "+ip+":"+port+".");
-		} 
+		}
 	}
-	
+
 	public boolean startServer() {
 		try {
 			// Create input buffer
 			InputStream inputstream = sslSocket.getInputStream();
 			InputStreamReader inputstreamreader = new InputStreamReader(inputstream);
 			reader = new BufferedReader(inputstreamreader);
-	
+
 			// Create output stream
 			OutputStream outputStream = sslSocket.getOutputStream();
-			writer = new OutputStreamWriter(outputStream); 
-			
+			writer = new OutputStreamWriter(outputStream);
+
 			return true;
 		} catch (Exception err) {
 			System.err.println(err);
 			return false;
 		}
 	}
-	
+
 	public boolean reconnect() {
 		if(sslSocket==null && ip != null)
 			try {
@@ -77,24 +79,24 @@ public class ServerConnection {
 				System.out.println("Fuck");
 				return false;
 			}
-		
+
 		this.close();
 		this.connected = startServer();
-		
+
 		return connected;
 	}
-	
+
 	public boolean send(String msg) throws IOException {
 		try {
 			writer.write(msg + "\n");
 			writer.flush();
-	
+
 			return true;
 		} catch (NullPointerException err) {
 			throw new IOException("No Socket");
 		}
 	}
-	
+
 	public String receive() throws IOException {
 		try {
 			writer.flush();
@@ -103,12 +105,12 @@ public class ServerConnection {
 			throw new IOException("No Socket");
 		}
 	}
-	
+
 	public String request(String msg) throws IOException  {
 		send( msg );
 		return receive();
 	}
-	
+
 	public void close() {
 		try{
 			this.connected = false;

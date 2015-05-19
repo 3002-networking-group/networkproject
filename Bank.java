@@ -8,7 +8,7 @@ import lib.*;
 
 /**
  * Bank Class For handling Ecent generation, checking and depositing
- * 
+ *
  * @author Jesse Fletcher, Caleb Fetzer, Reece Notargiacomo, Alexander
  *         Popoff-Asotoff
  * @version 5.9.15
@@ -89,72 +89,101 @@ public class Bank extends Node {
 		}
 
 		public void run() {
-			while (client.connected) {
 				try {
 					Message msg = new Message(client.receive());
 					switch (msg.getFlagEnum()) {
-					
+
 						/*
 						 * Bank Withdrawal
 						 * BANK_WIT => WIT
 						 */
 						case WIT:
 							ALERT("Collector connected  -->  Withdrawing money");
-							
+
 							int amount = Integer.parseInt(msg.data);
 							ALERT("Generating " + amount + " eCents!");
-							
+
 							for (int i = 0; i < amount; i++)
 								client.send(generateEcent());
-		
+
 							ALERT("Money sent");
+							client.close();
 							break;
-							
-							
+
+
 						/*
 						 * Bank Deposit
 						 * BANK_DEP => DEP
 						 */
 						case DEP:
 							ALERT("Analyst connected  -->  Depositing money");
-		
+
 							// Check if eCent is in valid eCent set
 							if (bankStore.contains(msg.data)) {
-								
+
 								ALERT("Depositing valid eCent");
 								ALERT("Sending acknowledgement to Analyst!");
-								client.send("VALID");
+								client.send(MessageFlag.VALID);
 								bankStore.remove(msg.data);
-								
+
 							} else {
-								
+
 								ALERT("Rejecting invalid eCent");
-								client.send("INVALID");
-								
+								client.send(MessageFlag.INVALID);
+
 							}
-							
+							client.close();
 							break;
-							
+
+						case PUBK:
+							ALERT("Analyst requesting Keypair..");
+
+							KeyPair keys = generateKeyPair();
+
+							System.out.println(keys.getPublic().getFormat());
+							client.send(StringFromKey(keys.getPublic()));
+							client.send(StringFromKey(keys.getPrivate()));
+							client.close();
+
+							ALERT("Keypair Sent");
+
+							break;
+
 						default:
 							ALERT("Unexpected input: " + msg.raw());
 							break;
-		
+
 					}
-	
+
 					ALERT("Request finished!");
 				} catch(IOException err) {
 					ALERT("Closing connection");
 					client.close();
 				}
 			}
+
+	}
+
+	private KeyPair generateKeyPair() {
+		try {
+			KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
+			keyGen.initialize(2048);
+			return keyGen.generateKeyPair();
+			//PrivateKey private_key = pair.getPrivate();
+			//PublicKey public_key = pair.getPublic();
+
+		} catch (NoSuchAlgorithmException e) {
+			ANNOUNCE("ERROR: Error generating secure socket keys");
+			System.exit(-1);
 		}
+		return null;
 	}
 
 	private static String generateEcent() {
 		String eCent = getSHA256Hash(Integer.toString(sequence++));
 
 		bankStore.add(eCent); // add ecent to valid set
-		
+
 		return eCent;
 	}
 

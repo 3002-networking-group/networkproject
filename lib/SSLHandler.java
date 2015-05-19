@@ -4,10 +4,10 @@ package lib;
  * SSL Certificate Handler
  *    > Creates consistent SSL certificate declarations.
  *    > Can be expanded to include other global properties.
- * 
- * @author Reece Notargiacomo
+ *
+ * @author Reece Notargiacomo, Jesse Fletcher, Caleb Fetzer, Alexander Popoff-Asotoff
  * @date May 8th 2015
- * 
+ *
  */
 
 
