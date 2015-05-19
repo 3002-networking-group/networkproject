@@ -1,7 +1,7 @@
 import java.io.*;
 
 import javax.net.ssl.*;
-
+import java.util.*;
 import java.security.*;
 
 import lib.*;
@@ -22,7 +22,6 @@ public class Bank extends Node {
 
 	private static ECentWallet bankStore;
 	private static HashSet<String> depositedEcent;
-	private static
 	private final static String ECENTWALLET_FILE = "bank.wallet";
 
 	/**

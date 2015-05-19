@@ -198,7 +198,9 @@ public class Analyst extends Node {
 								catch (Exception e){}
 								//////////////////////////////////////////////////////////
 
-								String result = data + "good"; // analyse LCS here
+								ALERT("Performing ANALYSIS of dicks");
+								String result = performLCS(data); // analyse LCS here
+
 
 								director.send( result );
 								ALERT("Analysis sent!");
@@ -221,6 +223,52 @@ public class Analyst extends Node {
 
 			}
 
+		}
+		private String performLCS (String data) {
+
+		    // Split String x here..
+
+		    // string- "ds:dsa:xx"
+				// string.split(":") = {"ds","dsa","xx"}
+				// string.split(":")[0] = "ds"
+
+
+				String[] parts = data.split("-");
+				String pattern = parts[0];
+				String randomString = parts[1];
+
+		    int M = pattern.length();
+		    int N = randomString.length();
+
+		    // opt[i][j] = length of LCS of x[i..M] and y[j..N]
+		    int[][] opt = new int[M+1][N+1];
+
+		    for (int i = M-1; i >= 0; i--) {
+		      for (int j = N-1; j >= 0; j--) {
+		        if (pattern.charAt(i) == randomString.charAt(j))
+		          opt[i][j] = opt[i+1][j+1] + 1;
+		        else
+		          opt[i][j] = Math.max(opt[i+1][j], opt[i][j+1]);
+		      }
+		    }
+
+		    String lcsString = new String();
+
+		    int i = 0, j = 0;
+
+		    while(i < M && j < N) {
+		      if (pattern.charAt(i) == randomString.charAt(j)) {
+		        // build the LCS
+		        lcsString += Character.toString(pattern.charAt(i));
+		        i++;
+		        j++;
+		    } else if (opt[i+1][j] >= opt[i][j+1])
+		        i++;
+		      else
+		        j++;
+		    }
+
+		    return lcsString;
 		}
 
 
