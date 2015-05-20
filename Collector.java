@@ -203,8 +203,9 @@ public class Collector extends Node {
 
 			ALERT("Awaiting response/encryption key...");
 
+			String tmp1 = director.receive();
 			// Read response
-			Message msg = new Message(director.receive());
+			Message msg = new Message(tmp1);
 
 			switch (msg.getFlagEnum()) {	// get key from director
 				case PUBK:
@@ -216,9 +217,12 @@ public class Collector extends Node {
 						String encrypted_packet = encrypt(temporary_eCent, analyst_public_key);
 						// send encrypted eCent + data
 						ALERT("Sending Encrypted Packet with Key: " + msg.data);
-						if(director.request(encrypted_packet).equals(MessageFlag.VALID)){
+
+						String temp2 = director.request(encrypted_packet);
+						if(temp2.equals(MessageFlag.VALID)){
 							director.send(data);
 						}
+
 						Message analysis = new Message (director.receive());
 						ALERT("Receiving response...");
 						// VALID - Valid result returned
@@ -230,7 +234,7 @@ public class Collector extends Node {
 						switch (analysis.getFlagEnum()) {
 							case VALID:
 								ALERT("VALID Response recieved!");
-								director.close();
+							//	director.close();
 								return analysis.data;
 							case DUP:
 								ALERT("Duplicate Ecent!!! Check wallet integrity");

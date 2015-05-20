@@ -28,6 +28,9 @@ public class Director extends Node {
 
 	private Set<String> busyAnalyst; // busy analysts (set of public keys)
 
+//	private Set<String> availAnalyst;
+	private ConcurrentLinkedQueue<String> availAnalyst;
+
 	private boolean socketIsListening = true;
 
 	// main
@@ -51,6 +54,9 @@ public class Director extends Node {
 
 		analystPool = new HashMap<String, HashMap<String, String>>(); // hashmap
 		busyAnalyst = Collections.synchronizedSet(new HashSet()); // busy analysts public key
+
+	//	availAnalyst = Collections.synchronizedSet(new HashSet());
+		availAnalyst = new ConcurrentLinkedQueue();
 
 		// SSL Certificate
 		SSLHandler.declareDualCert("SSL_Certificate", "cits3002");
@@ -108,6 +114,8 @@ public class Director extends Node {
 				Message msg = new Message(client.receive());
 				String[] msg_data = msg.getData();
 
+				ALERT("WHATS THIS CRAPHERHE");
+
 				switch (msg.getFlagEnum()) {
 
 					/*
@@ -142,11 +150,13 @@ public class Director extends Node {
 							synchronized(analystPool){
 								newpool.put(publicKey, address + ":" + port);
 								analystPool.put(type, newpool);
+								availAnalyst.add(publicKey);
 							}
 
 						} else {
 							synchronized(analystPool){
 								analystPool.get(type).put(publicKey, address + ":" + port);
+								availAnalyst.add(publicKey);
 							}
 						}
 
@@ -163,40 +173,52 @@ public class Director extends Node {
 					case DOIT:
 						ALERT("Collector sending request...");
 						ALERT("Data Analysis request recieved");
-						boolean success = false;
+						HashMap<String,String> datatype_analysts = analystPool.get(msg_data[DATA_TYPE]);
+
 						boolean stillBusy = true;
 
-						while(stillBusy){	// while theres still busy analysts left
-								// lock analyst pool
-							//	synchronized(busyAnalyst)
-								ALERT("HERHEHERHER");
-								HashMap<String,String> datatype_analysts = analystPool.get(msg_data[DATA_TYPE]);
+						ALERT("HERHEHERHER");
+						boolean success = false;
 
-								HashSet tmpBusy = new HashSet();
+						LinkedList<String> currentPool = new LinkedList();
 
-								synchronized(busyAnalyst){
-									for(String a : busyAnalyst) tmpBusy.add(a);
+						synchronized(availAnalyst){
+							for(String key : datatype_analysts.keySet()){
+								if(availAnalyst.contains(key)){
+									currentPool.add(key);			// create pool of availiable analysts
+									System.out.println("THIS SI THE KEY: "+key.substring(40,50));
 								}
+							}
+						}
 
-								HashSet<String> disconnected_analysts = new HashSet();	// temp hashSet of analyst who fail to connect this session
-								int numBusy = 0;
+						HashSet tmpBusy = new HashSet();
 
-								// If there are some analysts
-								if (datatype_analysts != null) {
-									for (String k : datatype_analysts.keySet()) {
-											ALERT("GAYGAYGAYGAYGAYGAGYAGYAGAYGAYGAGYAGYAGYAGAGYGAYAGAGYAGYAGAYGAGYAGYAGYAGYGAYAGYAG");
-											String analystKey = new String(k);
+						HashSet<String> disconnected_analysts = new HashSet();	// temp hashSet of analyst who fail to connect this session
+						int numBusy = 0;
 
-											if(!tmpBusy.contains(k)){
-											ALERT("Serving: " + k);
-										//	synchronized(busyAnalyst){
-											//	if (!tmpBusy.contains(analystKey))
-													busyAnalyst.add(analystKey);
-										//	}
+						// If there are some analysts
+						if (datatype_analysts != null) {
+							while (!currentPool.isEmpty()) {
 
-											if(!success){
+									boolean accepted = false;
+									String analystKey = currentPool.poll();
+
+									if(!success){
+										ALERT("T---------- THREAD # " + Thread.currentThread().getId() + " LOOPING THROUGH POOL");
+										synchronized(availAnalyst){
+											if(availAnalyst.contains(analystKey)){
+												accepted = true;
+												availAnalyst.remove(analystKey);
+											} else numBusy++;
+										}
+									}
+									if(accepted){
+
+										ALERT("Analyst Accepted -1-1-1-1-1-1-1-1-1-1-11-");
+										if(!success){
 											String a = datatype_analysts.get(analystKey);
 											analyst = new ServerConnection(a.split(":")[0], Integer.parseInt(a.split(":")[1]));
+											ALERT("SERVER CONNECTION CREATED HERHERHEEHREHREHR");
 
 											if(analyst.connected){	// check if analyst is still online
 
@@ -240,6 +262,7 @@ public class Director extends Node {
 												{
 													System.out.println("Error with Analyst before Ecent deposited.");
 													stillBusy = false;
+													availAnalyst.add(analystKey);
 													broken = true;
 													client.send(MessageFlag.RET_CENT);	// return RET flag to indicate ecent still valid
 													break;
@@ -258,9 +281,12 @@ public class Director extends Node {
 														stillBusy = false;
 
 														analyst.close();
+
+														availAnalyst.add(analystKey);
+
 													//	synchronized(busyAnalyst){
 
-															busyAnalyst.remove(analystKey);
+														//busyAnalyst.remove(analystKey);
 														//}
 
 													} catch (IOException err)
@@ -275,49 +301,45 @@ public class Director extends Node {
 											}else{
 												System.out.println("Connection failed: " + a + ", trying next one.");
 												disconnected_analysts.add(analystKey);
+												availAnalyst.remove(analystKey);
 												ALERT("ADDING DISCONNECTED ANALYST!?>!?!?!?!??!");
 											//	busyAnalyst.remove(analystKey);
 											}
-
-											}else if(tmpBusy.contains(analystKey)){
-												numBusy++;	// count analyst as busy (as opposed to dc)
-
-											}}
-
+										}
 									}
 
-									if(numBusy==0 || success) stillBusy = false;	// no busy analysts left or success = break while loop
 
-									if(!disconnected_analysts.isEmpty()){		// remove disconnected analysts from pool
-										ALERT("DELETEING DISCONNECTED ANALYSTS!!_!_!_!_!_!_!_!_!");
-									//	synchronized(analystPool){
-											for(String s : disconnected_analysts){
-												analystPool.get(msg_data[DATA_TYPE]).remove(s);
-											}
-									//	}
-									}
-
-								}else {	// end of if (datatype_analysis != null)
-									client.send(MessageFlag.FAIL);	// return fail flag to collector to indicate no analysts
-									ALERT("Error: No analysts currently available!");
-									stillBusy = false;
-									break;
+								if(!disconnected_analysts.isEmpty()){		// remove disconnected analysts from pool
+									ALERT("DELETEING DISCONNECTED ANALYSTS!!_!_!_!_!_!_!_!_!");
+								//	synchronized(analystPool)
+										for(String s : disconnected_analysts){
+											analystPool.get(msg_data[DATA_TYPE]).remove(s);
+											availAnalyst.remove(s);
+										}
+								//
 								}
+							}
+						}else {	// end of if (datatype_analysis != null)
+							client.send(MessageFlag.FAIL);	// return fail flag to collector to indicate no analysts
+							ALERT("Error: No analysts currently available!");
+							stillBusy = false;
+							break;
+						}
+						break;
 
-						}	// end of while
-						break;	// end of DOIT case
+					//	// end of while
+					//	break;	// end of DOIT case
 
 					default:
 						ALERT("Unrecognised message: " + msg.raw());
 						break;
 				}
-
 				client.close();
 
-			} catch(IOException err) {
+
+			} catch (IOException err) {
 				ALERT("Closing connection");
 				client.close();
-
 			}
 
 		}

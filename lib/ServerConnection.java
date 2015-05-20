@@ -5,7 +5,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
 import java.net.UnknownHostException;
 
 import javax.net.ssl.SSLSocket;
@@ -21,7 +21,7 @@ import javax.net.ssl.SSLSocketFactory;
  */
 
 public class ServerConnection {
-	private OutputStreamWriter writer;
+	private PrintWriter writer;
 	private BufferedReader reader;
 	private SSLSocket sslSocket = null;
 	public boolean busy = false;
@@ -61,7 +61,7 @@ public class ServerConnection {
 
 			// Create output stream
 			OutputStream outputStream = sslSocket.getOutputStream();
-			writer = new OutputStreamWriter(outputStream);
+			writer = new PrintWriter(outputStream);
 
 			return true;
 		} catch (Exception err) {
@@ -92,17 +92,25 @@ public class ServerConnection {
 			writer.write(msg + "\n");
 			writer.flush();
 
+			if(writer.checkError()){
+				this.close();
+				return false;
+			}
+
 			return true;
 		} catch (NullPointerException err) {
+			this.close();
 			throw new IOException("No Socket");
+
 		}
 	}
 
 	public String receive() throws IOException {
 		try {
 			writer.flush();
-			return reader.readLine();
+			return (new String(reader.readLine()));
 		} catch (NullPointerException err) {
+			this.close();
 			System.out.println("SHITCUNTMOTHERFUCK");
 			throw new IOException("No Socket");
 		}

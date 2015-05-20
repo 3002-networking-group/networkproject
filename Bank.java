@@ -138,7 +138,7 @@ public class Bank extends Node {
 									ALERT("Sending acknowledgement to Analyst!");
 									client.send(MessageFlag.VALID);
 							//		depositedEcent.add(msg.data);
-									bankStore.remove(msg.data);
+							//		bankStore.remove(msg.data);
 
 
 								} else {
@@ -237,6 +237,7 @@ public class Bank extends Node {
 		}
 
 	}
+
 	private KeyPair generateKeyPair() {
 		try {
 			KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");

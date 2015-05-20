@@ -277,6 +277,9 @@ public class Analyst extends Node {
 
 			} catch (IOException err) {
 				ALERT("Error: Could not recieve message from Director");
+				bankConn = false;
+				dirConn = false;
+				getServers();
 
 			}
 	}
