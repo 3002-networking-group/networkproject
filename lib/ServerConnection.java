@@ -45,10 +45,10 @@ public class ServerConnection {
 			this.connected = startServer();
 
 		} catch (UnknownHostException e) {
-			System.err.println("No host found at "+ip+":"+port+".");
+			System.out.println("No host found at "+ip+":"+port+".");
 
 		} catch (IOException e) {
-			System.err.println("No listening host at "+ip+":"+port+".");
+			System.out.println("No listening host at "+ip+":"+port+".");
 		}
 	}
 
@@ -66,6 +66,7 @@ public class ServerConnection {
 			return true;
 		} catch (Exception err) {
 			System.err.println(err);
+			System.out.println("GETTING TO START THE SERVER BRUH");
 			return false;
 		}
 	}
@@ -102,6 +103,7 @@ public class ServerConnection {
 			writer.flush();
 			return reader.readLine();
 		} catch (NullPointerException err) {
+			System.out.println("SHITCUNTMOTHERFUCK");
 			throw new IOException("No Socket");
 		}
 	}

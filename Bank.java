@@ -137,7 +137,7 @@ public class Bank extends Node {
 									ALERT("Depositing valid eCent");
 									ALERT("Sending acknowledgement to Analyst!");
 									client.send(MessageFlag.VALID);
-									depositedEcent.add(msg.data);
+							//		depositedEcent.add(msg.data);
 									bankStore.remove(msg.data);
 
 
@@ -219,7 +219,7 @@ public class Bank extends Node {
 
 					////////////////// REBROADCAST EVERY X SECONDS ////////////////////
 					try{
-						System.out.println("SENT UDP -------------");
+						//System.out.println("SENT UDP -------------");
 						Thread.sleep(5000);	// 5 sec
 					}
 					catch (Exception e){}

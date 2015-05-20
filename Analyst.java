@@ -181,7 +181,6 @@ public class Analyst extends Node {
 
 	private int depositMoney(String eCent) { // return 1 if valid ecent deposited, 0 if it's a duplicate (valid but copy)
 	 					//   -1 for invalid ecent hash and 2 for bank connection
-
 		ALERT("Sending eCent to the bank");
 
 		String deposit_request = MessageFlag.BANK_DEP + ":" + eCent;
@@ -216,16 +215,16 @@ public class Analyst extends Node {
 
 				if(request.getFlag().equals(MessageFlag.EXAM_REQ)) {
 
-					String decrypted_packet = decrypt(request.data,private_key);
 
-					if (decrypted_packet == null) {
-						ALERT("Error: Could not decrypt message! (" + decrypted_packet + ")");
+					String eCent = decrypt(request.data,private_key);
+
+
+					if (eCent == null) {
+						ALERT("Error: Could not decrypt message! (" + eCent + ")");
 					} else {
 						// Successful decryption
 						ALERT("Depositing payment!");
 
-						String eCent = decrypted_packet.split(":")[0];
-						String data = decrypted_packet.split(":")[1];
 
 						//////////////////////SLEEP BLOCK///////////////////////
 						try{
@@ -242,6 +241,8 @@ public class Analyst extends Node {
 								break;
 							case 1:
 								director.send(MessageFlag.VALID);
+
+								String data = director.receive();
 
 								ALERT("Payment deposited!");
 
@@ -266,6 +267,8 @@ public class Analyst extends Node {
 							case 0:
 								director.send(MessageFlag.DUP);
 								ALERT("Error: Duplicate Ecent.");
+								break;
+							default:
 								break;
 						}
 					}

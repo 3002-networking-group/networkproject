@@ -1,7 +1,6 @@
 import java.io.*;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.*;
+import java.util.concurrent.*;
 import java.net.*;
 
 import javax.net.ssl.*;
@@ -25,7 +24,7 @@ public class Director extends Node {
 	private static final int DATA_TYPE = 0;
 	private static final int PUBLIC_KEY = 1;
 
-	private Map<String, HashMap<String, String>> analystPool; // HashMap<DataType, HashMap<PublicKey, Address>> analyst hashmap pool
+	private HashMap<String, HashMap<String, String>> analystPool; // HashMap<DataType, HashMap<PublicKey, Address>> analyst hashmap pool
 
 	private Set<String> busyAnalyst; // busy analysts (set of public keys)
 
@@ -50,8 +49,8 @@ public class Director extends Node {
 	public Director(int portNo) {
 		set_type("DIRECTOR");
 
-		analystPool = Collections.synchronizedMap(new HashMap<String, HashMap<String, String>>()); // hashmap
-		busyAnalyst = Collections.synchronizedSet(new HashSet<String>()); // busy analysts public key
+		analystPool = new HashMap<String, HashMap<String, String>>(); // hashmap
+		busyAnalyst = Collections.synchronizedSet(new HashSet()); // busy analysts public key
 
 		// SSL Certificate
 		SSLHandler.declareDualCert("SSL_Certificate", "cits3002");
@@ -168,117 +167,144 @@ public class Director extends Node {
 						boolean stillBusy = true;
 
 						while(stillBusy){	// while theres still busy analysts left
-							synchronized(analystPool){	// lock analyst pool
-								synchronized(busyAnalyst){
-
+								// lock analyst pool
+							//	synchronized(busyAnalyst)
+								ALERT("HERHEHERHER");
 								HashMap<String,String> datatype_analysts = analystPool.get(msg_data[DATA_TYPE]);
 
-								// Get list of analysts for this data type
+								HashSet tmpBusy = new HashSet();
+
+								synchronized(busyAnalyst){
+									for(String a : busyAnalyst) tmpBusy.add(a);
+								}
 
 								HashSet<String> disconnected_analysts = new HashSet();	// temp hashSet of analyst who fail to connect this session
 								int numBusy = 0;
 
 								// If there are some analysts
 								if (datatype_analysts != null) {
+									for (String k : datatype_analysts.keySet()) {
+											ALERT("GAYGAYGAYGAYGAYGAGYAGYAGAYGAYGAGYAGYAGYAGAGYGAYAGAGYAGYAGAYGAGYAGYAGYAGYGAYAGYAG");
+											String analystKey = new String(k);
 
-									// Try some analyst until you find one that's free and connected
-									for (String analystKey : datatype_analysts.keySet()) {
+											if(!tmpBusy.contains(k)){
+											ALERT("Serving: " + k);
+										//	synchronized(busyAnalyst){
+											//	if (!tmpBusy.contains(analystKey))
+													busyAnalyst.add(analystKey);
+										//	}
 
-										if (!busyAnalyst.contains(analystKey) && !success) {
+											if(!success){
 											String a = datatype_analysts.get(analystKey);
-
 											analyst = new ServerConnection(a.split(":")[0], Integer.parseInt(a.split(":")[1]));
 
-											if(analyst.connected){
+											if(analyst.connected){	// check if analyst is still online
 
-												try{	// try block BEFORE the ecent is deposited
-													//
-														// Reserve the analyst and lock busyAnalyst set
-														busyAnalyst.add(analystKey);
+												boolean broken = false;
 
-
+												try{
 													ALERT("Analyst found! Sending Collector the analyst public key...");
 													String packet = client.request(MessageFlag.PUB_KEY + ":" + analystKey);
 													String data, result = null;
 
 													// Send eCent and data, and request eCent deposit verification
 													data = MessageFlag.EXAM_REQ + ":" + packet;
-													boolean returnable = true;
 
 													Message depCon = new Message(analyst.request(data));	// deposit confirmation
-													if(depCon.getFlag().equals(MessageFlag.VALID)) returnable = false;
-													else{
-														switch (depCon.getFlagEnum()) {
-															case INVALID:
-																ALERT("Ecent Invalid - Informing Collector");
-																client.send(MessageFlag.INVALID);
-																break;
-															case DUP:
-																ALERT("Ecent duplicate - Informing Collector");
-																client.send(MessageFlag.DUP);
-																break;
-															case RET:
-																ALERT("Ecent deposit failed - Returnable Ecent");
-																client.send(MessageFlag.RET_CENT);
-																break;
-														}
-														break;	// break loop (bad ecent)
+													//if(depCon.getFlag().equals(MessageFlag.VALID)) returnable = false;
+												//	else
+													switch (depCon.getFlagEnum()) {
+														case VALID:
+															client.send(MessageFlag.VALID);	// ready to recieve data
+															break;
+														case INVALID:
+															broken = true;
+															ALERT("Ecent Invalid - Informing Collector");
+															client.send(MessageFlag.INVALID);
+															stillBusy = false;
+															break;
+														case DUP:
+															broken = true;
+															ALERT("Ecent duplicate - Informing Collector");
+															client.send(MessageFlag.DUP);
+															stillBusy = false;
+															break;
+														case RET:
+															broken = true;
+															ALERT("Ecent deposit failed - Returnable Ecent");
+															client.send(MessageFlag.RET_CENT);
+															stillBusy = false;
+															break;
 													}
-
 												} catch (IOException err)
 												{
 													System.out.println("Error with Analyst before Ecent deposited.");
+													stillBusy = false;
+													broken = true;
 													client.send(MessageFlag.RET_CENT);	// return RET flag to indicate ecent still valid
 													break;
 												}
 
-												try{	// try block AFTER Ecent is deposited
-													String result = analyst.receive();
-													ALERT("Result recieved from Analyst");
+												if(!broken){
+													try{	// try block AFTER Ecent is deposited
+														String result = client.receive();
+														analyst.send(result);
+														result = analyst.receive();
 
-													client.send(MessageFlag.VALID + ":" + result);
+														client.send(MessageFlag.VALID + ":" + result);
 
-													ALERT("Result returned to Collector");
-													ALERT("i love balls");
-													success = true;
-													stillBusy = false;
+														ALERT("Result returned to Collector");
+														success = true;
+														stillBusy = false;
 
-													//synchronized(busyAnalyst){
-														busyAnalyst.remove(analystKey);
-													//}
+														analyst.close();
+													//	synchronized(busyAnalyst){
 
-												} catch (IOException err)
-												{
-													System.out.println("Error with Analyst after Ecent deposited.");
-													client.send(MessageFlag.ERROR);		// return ERROR flag to indicate lost ecent
-													break;
+															busyAnalyst.remove(analystKey);
+														//}
+
+													} catch (IOException err)
+													{
+														System.out.println("Error with Analyst after Ecent deposited.");
+														stillBusy = false;
+														client.send(MessageFlag.ERROR);		// return ERROR flag to indicate lost ecent
+														break;
+													}
 												}
 
 											}else{
 												System.out.println("Connection failed: " + a + ", trying next one.");
 												disconnected_analysts.add(analystKey);
+												ALERT("ADDING DISCONNECTED ANALYST!?>!?!?!?!??!");
+											//	busyAnalyst.remove(analystKey);
 											}
 
-										}else numBusy++;	// count analyst as busy (as opposed to dc)
+											}else if(tmpBusy.contains(analystKey)){
+												numBusy++;	// count analyst as busy (as opposed to dc)
+
+											}}
+
 									}
 
 									if(numBusy==0 || success) stillBusy = false;	// no busy analysts left or success = break while loop
 
 									if(!disconnected_analysts.isEmpty()){		// remove disconnected analysts from pool
+										ALERT("DELETEING DISCONNECTED ANALYSTS!!_!_!_!_!_!_!_!_!");
+									//	synchronized(analystPool){
 											for(String s : disconnected_analysts){
 												analystPool.get(msg_data[DATA_TYPE]).remove(s);
 											}
+									//	}
 									}
+
+								}else {	// end of if (datatype_analysis != null)
+									client.send(MessageFlag.FAIL);	// return fail flag to collector to indicate no analysts
+									ALERT("Error: No analysts currently available!");
+									stillBusy = false;
+									break;
 								}
-								}
-							}
-						}
-						if (success) {
-							ALERT("Finished analysis!");
-						}else {
-							client.send(MessageFlag.FAIL);	// return fail flag to collector to indicate no analysts
-							ALERT("Error: No analysts currently available!");
-						}
+
+						}	// end of while
 						break;	// end of DOIT case
 
 					default:
@@ -320,7 +346,7 @@ public class Director extends Node {
 
 					////////////////// REBROADCAST EVERY X SECONDS ////////////////////
 					try{
-						System.out.println("SENT UDP -------------");
+						//System.out.println("SENT UDP -------------");
 						Thread.sleep(5000);	// 5 sec
 					}
 					catch (Exception e){}

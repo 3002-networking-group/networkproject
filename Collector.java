@@ -35,6 +35,8 @@ public class Collector extends Node {
 		set_type("COLLECTOR");
 		SSLHandler.declareClientCert("SSL_Certificate","cits3002");
 
+		eCentWallet = new ECentWallet( ECENTWALLET_FILE );
+
 		bankConn = false;
 		dirConn = false;
 
@@ -49,19 +51,28 @@ public class Collector extends Node {
 	}
 
 	private void start(){
-		try{
-			// Initiate eCentWallet
-			eCentWallet = new ECentWallet( ECENTWALLET_FILE );
 
-			if (eCentWallet.isEmpty())
-				buyMoney(100);
+		while(true){
+			try{
+				// buy money if broke
+				if (eCentWallet.isEmpty())
+					buyMoney(100);
 
-			ANNOUNCE(eCentWallet.displayBalance());
+				ANNOUNCE(eCentWallet.displayBalance());
 
-			if(initiateWithDirector())
-				System.out.println(analyse_data("DATA"));
-		}catch (IOException e){
-			ALERT("Problem analysing data");
+				if(initiateWithDirector()) System.out.println(analyse_data("DATA"));
+
+				try{
+					Thread.sleep(5000);	// 5 sec
+				}
+				catch (Exception e){}
+
+			}catch (IOException e){
+				ALERT("Problem with connection: Reaquiring bank/director.");
+				bankConn = false;
+				dirConn = false;
+				getServers();
+			}
 		}
 
 	}
@@ -195,54 +206,60 @@ public class Collector extends Node {
 			// Read response
 			Message msg = new Message(director.receive());
 
-			if(msg.getFlag() == MessageFlag.PUB_KEY) {
-
-				if(verifyPubKey(msg.data)){
-					PublicKey analyst_public_key = (PublicKey) KeyFromString(msg.data);
-					ALERT("Public key recieved!");
-
-					String data = genStringForData();
-					ALERT("Encrypting eCent and data!");
-					String encrypted_packet = encrypt(temporary_eCent + ":" + data, analyst_public_key);
-
-					// send encrypted eCent + data
-					ALERT("Sending Encrypted Packet!");
-					director.send(encrypted_packet);
-
-					Message analysis = new Message (director.receive());
-					ALERT("Receiving response...");
-
-					// VALID - Valid result returned
-					// DUP - Duplicate Ecent sent
-					// RET - Analyst dc before depositing ecent (returnable)
-					// INVALID - Invalid Ecent sent (by collector)
-					// FAIL - No analysts left in pool (try again later)
-					// ERROR - Analyst dc after depositing ecent (invalid/lost)
-					switch (analysis.getFlagEnum()) {
-						case VALID:
-							ALERT("Response recieved!");
-							director.close();
-							return analysis.data;
-						case DUP:
-							ALERT("Duplicate Ecent!!! Check wallet integrity");
-							break;
-						case RET:
-							ALERT("Analyst disconnected before depositing Ecent, returning to wallet.");
-							eCentWallet.add(temporary_eCent,true);
-							break;
-						case INVALID:
-							ALERT("Invalid Ecent sent from Wallet, check wallet integrity.");
-							break;
-						case FAIL:
-							ALERT("Could not connect to analyst.");
-							break;
-						case ERROR:
-							ALERT("Analyst disconnected after depositing Ecent. Ecent lost.");
-							break;
+			switch (msg.getFlagEnum()) {	// get key from director
+				case PUBK:
+					if(verifyPubKey(msg.data)){
+						PublicKey analyst_public_key = (PublicKey) KeyFromString(msg.data);
+						ALERT("Public key recieved!");
+						String data = genStringForData();
+						ALERT("Encrypting eCent and data!");
+						String encrypted_packet = encrypt(temporary_eCent, analyst_public_key);
+						// send encrypted eCent + data
+						ALERT("Sending Encrypted Packet with Key: " + msg.data);
+						if(director.request(encrypted_packet).equals(MessageFlag.VALID)){
+							director.send(data);
+						}
+						Message analysis = new Message (director.receive());
+						ALERT("Receiving response...");
+						// VALID - Valid result returned
+						// DUP - Duplicate Ecent sent
+						// RET - Analyst dc before depositing ecent (returnable)
+						// INVALID - Invalid Ecent sent (by collector)
+						// FAIL - No analysts left in pool (try again later)
+						// ERROR - Analyst dc after depositing ecent (invalid/lost)
+						switch (analysis.getFlagEnum()) {
+							case VALID:
+								ALERT("VALID Response recieved!");
+								director.close();
+								return analysis.data;
+							case DUP:
+								ALERT("Duplicate Ecent!!! Check wallet integrity");
+								break;
+							case RET:
+								ALERT("Analyst disconnected before depositing Ecent, returning to wallet.");
+								eCentWallet.add(temporary_eCent);
+								break;
+							case INVALID:
+								ALERT("Invalid Ecent sent from Wallet, check wallet integrity.");
+								break;
+							case FAIL:
+								ALERT("Could not connect to analyst.");
+								break;
+							case ERROR:
+								ALERT("Analyst disconnected after depositing Ecent. Ecent lost.");
+								break;
+							default:
+								ALERT("Unrecognised Flag!");
+						}
+					}else{
+						ALERT("Public Key not verified! Check director authenticity");
 					}
-				}else{
-					ALERT("Public Key not verified! Check director authenticity");
-				}
+					break;
+
+				case FAIL:	// no analysts avail
+					ALERT("No analyst's availiable, returning ecent to wallet.");
+					eCentWallet.add(temporary_eCent);
+					break;
 			}
 			director.close();
 
