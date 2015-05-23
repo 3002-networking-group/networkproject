@@ -19,7 +19,7 @@ public class Analyst extends Node {
 
 	private SSLServerSocket analyst;
 
-	private String analyst_type;
+	private String analyst_type; 
 
 	private PrivateKey private_key;
 	private PublicKey public_key;
@@ -31,6 +31,7 @@ public class Analyst extends Node {
 	private int myPort;
 
 	public static void main(String[] args) {
+
 		new Analyst(args);
 	}
 
@@ -43,8 +44,7 @@ public class Analyst extends Node {
 
 		getServers();
 	}
-
-	// get arguments
+	
 	public void getArgs (String[] args){
 		if (args.length==0){
 			System.out.println("Please run with analyst parameters:");
@@ -53,7 +53,7 @@ public class Analyst extends Node {
 			System.out.println("-c starts an analyst in Corrupt mode");
 			System.exit(0);
 		}
-
+		
 		for(int i=0; i<args.length ; i++){
 			if(args[i].equals("-n")){
 				analyst_type= "NUM";
@@ -74,11 +74,10 @@ public class Analyst extends Node {
 			}
 
 		}
-
+	
 	}
 
-	// start main analyst process
-	private void start(){
+	private void start(){		// start main analyst process
 
 		if(!getKeysFromBank()){
 			ANNOUNCE("Could not retrieve Keypair from Bank.");
@@ -103,15 +102,13 @@ public class Analyst extends Node {
 		}
 	}
 
-	// get bank/dir listening address/port
-	private void getServers(){
+	private void getServers(){	// get bank/dir listening address/port
 		while(!bankConn || !dirConn){
 			startUDP();
 		}
 		start();
 	}
 
-	// startUDP listening for bank/director server IP and ports
 	private void startUDP(){
 		try{
 			DatagramSocket socket = new DatagramSocket(1566);
@@ -150,7 +147,6 @@ public class Analyst extends Node {
 		}
 	}
 
-	// start SSL socket factory
 	public boolean startSocket(int portNo) {
 		try {
 			SSLServerSocketFactory sf;
@@ -244,15 +240,19 @@ public class Analyst extends Node {
 	}
 
 	private void run(SSLSocket clientSocket) {
+
 			try {
 				director =  new ServerConnection(clientSocket);
 
 				Message request = new Message(director.receive());
+
 				ALERT("Receiving request! - " + StringFromKey(public_key).substring(50,80));
 
 				if(request.getFlag().equals(MessageFlag.EXAM_REQ)) {
 
+
 					String eCent = decrypt(request.data,private_key);
+
 
 					if (eCent == null) {
 						ALERT("Error: Could not decrypt message! (" + eCent + ")");
@@ -260,10 +260,11 @@ public class Analyst extends Node {
 						// Successful decryption
 						ALERT("Depositing payment!");
 
+
 						//////////////////////SLEEP BLOCK///////////////////////
 						try{
 							System.out.println("SLEEPING BEFORE DEPOSIT...");
-							Thread.sleep(50);
+							Thread.sleep(50);	// 3.5 sec
 						}
 						catch (Exception e){}
 						//////////////////////////////////////////////////////////
@@ -272,7 +273,6 @@ public class Analyst extends Node {
 							case 2:
 								director.send(MessageFlag.RET_CENT);
 								ALERT_WITH_DELAY("Error depositing to bank.");
-								director.close();
 								break;
 							case 1:
 								director.send(MessageFlag.VALID);
@@ -284,7 +284,7 @@ public class Analyst extends Node {
 								/////////////////////////SLEEP BLOCK//////////////////////
 								try{
 									System.out.println("SLEEPING AFTER DEPOSIT...");
-									Thread.sleep(50);
+									Thread.sleep(50);	// 3.5 sec
 								}
 								catch (Exception e){}
 								//////////////////////////////////////////////////////////
@@ -298,29 +298,28 @@ public class Analyst extends Node {
 							case -1:
 								director.send(MessageFlag.INVALID);
 								ALERT("Error: Could not deposit eCent: Invalid Ecent");
-								director.close();
 								break;
 							case 0:
 								director.send(MessageFlag.DUP);
 								ALERT("Error: Duplicate Ecent.");
-								director.close();
 								break;
 							default:
 								break;
 						}
 					}
 				}
-				if(director.connected) director.close();
+				director.close();
 
 			} catch (IOException err) {
 				ALERT("Error: Could not recieve message from Director");
 				bankConn = false;
 				dirConn = false;
 				getServers();
+
 			}
 	}
 
-	// check analyst type flags and return correct analysis
+	
 	private String analyse(String data){
 		if (analyst_type.equals("DNA")){
 			return performLCS(data);
@@ -333,35 +332,31 @@ public class Analyst extends Node {
 		}
 		return "Analyst failed";
 	}
-
-	/////////////////////////////////////////////
-	// DATA ANALYSIS METHODS:
-	/////////////////////////////////////////////
-
+	
 	private String performNumberAnal(String intString){
-		int sum = 0;
-		for (int i = 0; i < intString.length(); i++) {
-	       		sum += Integer.parseInt(Character.toString(intString.charAt(i)));
-		}
+		 int sum = 0;
+	     for (int i = 0; i < intString.length(); i++) {
+	        sum += Integer.parseInt(Character.toString(intString.charAt(i)));
+	      }
 
-		// returns the average represented as a string
-		return Integer.toString((sum/intString.length()));
+	     // returns the average represented as a string
+	     return Integer.toString((sum/intString.length()));
 	}
 	// Perform Longest Common Subsequence algorithm on string
 
-	private String findCorruption(String corruptedString) {
+	 private String findCorruption(String corruptedString) {
 		// check for an instance of X
 		if (corruptedString.indexOf("X") == -1) {
-			System.out.println("String is not corrupt! Returning string..");
-			return corruptedString;
+		System.out.println("String is not corrupt! Returning string..");
+		return corruptedString;
 		} else {
-			for (int i = 0; i < corruptedString.length(); i++)
-				corruptedString = corruptedString.replace("X","");
-			System.out.println("The fixed string is: " + corruptedString);
-			return corruptedString;
+		for (int i = 0; i < corruptedString.length(); i++)
+		corruptedString = corruptedString.replace("X","");
+		System.out.println("The fixed string is: " + corruptedString);
+		return corruptedString;
 		}
 	 }
-
+		
 	private String performLCS (String data) {
 		String[] parts = data.split("-");
 		String pattern = parts[0];

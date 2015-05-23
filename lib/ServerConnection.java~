@@ -67,6 +67,7 @@ public class ServerConnection {
 			return true;
 		} catch (Exception err) {
 			System.err.println(err);
+			System.out.println("GETTING TO START THE SERVER BRUH");
 			return false;
 		}
 	}
@@ -76,6 +77,11 @@ public class ServerConnection {
 		try {
 			writer.write(msg + "\n");
 			writer.flush();
+
+		//	if(writer.checkError()){
+		//		this.close();
+		//		return false;
+		//	}
 
 			return true;
 		} catch (NullPointerException err) {

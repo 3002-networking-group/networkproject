@@ -31,6 +31,10 @@ public class Message {
 	  this(flag+":"+message);
   }
 
+  public boolean isEmpty(){
+	  return (this.data.isEmpty() && flag==null);
+  }
+  
   public String getFlag() {
 	  String flag;
 

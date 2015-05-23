@@ -69,13 +69,17 @@ public class Bank extends Node {
 				} catch (IOException e) {
 					System.out.println("Error connecting client");
 				}
-				new Thread(new bankConnection(sslsocket)).start(); 
+
+				new Thread(new bankConnection(sslsocket)).start(); // start new
+																	// thread
 			}
 		}
 	}
 
 	private boolean startServer() {
 		try {
+			// Use the SSLSSFactory to create a SSLServerSocket to create a
+			// SSLSocket
 			SSLServerSocketFactory sslserversocketfactory = (SSLServerSocketFactory) SSLServerSocketFactory
 					.getDefault();
 			sslserversocket = (SSLServerSocket) sslserversocketfactory
@@ -148,10 +152,7 @@ public class Bank extends Node {
 							}
 							client.close();
 							break;
-						/*
-						 * Public Key Request
-						 * PUB_K => PUBK
-						 */
+
 						case PUBK:
 							ALERT("Analyst requesting Keypair..");
 
@@ -168,10 +169,7 @@ public class Bank extends Node {
 							ALERT("Keypair Sent");
 
 							break;
-						/*
-						 * Public key Verification
-						 * PUB_A => PUBA
-						 */
+
 						case PUBA:
 							ALERT("Collector requesting key verification");
 
@@ -193,6 +191,7 @@ public class Bank extends Node {
 					client.close();
 				}
 			}
+
 	}
 
 	public class BankUDP implements Runnable {
@@ -232,8 +231,10 @@ public class Bank extends Node {
 				catch (IOException e){
 					ALERT("UDP IO Exception sending broadcast packet");
 				}
+
 			}
 		}
+
 	}
 
 	private KeyPair generateKeyPair() {

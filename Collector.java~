@@ -49,7 +49,7 @@ public class Collector extends Node {
 
 		getServers();
 	}
-
+	
 	// get arguments for collector
 	public void getArgs (String[] args){
 		if (args.length==0){
@@ -60,7 +60,7 @@ public class Collector extends Node {
 			System.out.println("-e allows for explicit data entry");
 			System.exit(0);
 		}
-
+		
 		for(int i=0; i<args.length ; i++){
 			if(args[i].equals("-n")){
 				collectorType= "NUM";
@@ -82,11 +82,13 @@ public class Collector extends Node {
 				System.out.println("Invalid parameter: " +args[i]);
 				System.exit(0);
 			}
+
 		}
+	
 	}
 
 	// getServers loops starting UDP listening until it finds both director and bank addresses
-	private void getServers(){
+	private void getServers(){	// get bank/dir listening address/port
 		while(!bankConn || !dirConn){
 			startUDP();		// get addresses from UDP socket
 
@@ -127,7 +129,7 @@ public class Collector extends Node {
 	}
 
 	// start UDP listens on port 1566 for datagrams containing director or bank server IP and ports
-
+	
 	private void startUDP(){
 		try{
 			DatagramSocket socket = new DatagramSocket(1566);
@@ -167,6 +169,7 @@ public class Collector extends Node {
 	}
 
 	// buyMoney requests eCents from Bank
+	
 	private void buyMoney(int amount){
 
 		ALERT("Sending Money Withdrawl Request..");
@@ -199,6 +202,7 @@ public class Collector extends Node {
 	}
 
 	// initilizes collector with director and checks there is valid data types
+	
 	private boolean initiateWithDirector()
 	{
 		String connect_director = MessageFlag.C_INIT + ":" + collectorType;
@@ -211,12 +215,12 @@ public class Collector extends Node {
 		} catch(IOException err) {
 			ALERT_WITH_DELAY("Could not contact director");
 		}
-
+		
 		director.close();
         	return result.equals(MessageFlag.VALID);
 	}
-
 	// Verify a public key from Director was issued by bank (must be from analyst)
+	
 	private boolean verifyPubKey(String pubKey){
 		try{
 			bank = new ServerConnection(bankIPAddress, bankPort);
@@ -236,7 +240,6 @@ public class Collector extends Node {
 		return false;
 
 	}
-
 	private String analyse_data(String dataType) throws IOException {
 
 		ALERT("Connected! (Director)");
@@ -249,21 +252,20 @@ public class Collector extends Node {
 			director.send(MessageFlag.EXAM_REQ + ":" + dataType);
 			ALERT("Awaiting response/encryption key...");
 
+			// Read response
 			Message msg = new Message(director.receive());
 
 			switch (msg.getFlagEnum()) {	// get key from director
 				case PUBK:
 					if(verifyPubKey(msg.data)){
 						PublicKey analyst_public_key = (PublicKey) KeyFromString(msg.data);
-
 						ALERT("Public key received! - " + msg.data.substring(50,80));
 						String data = genStringForData();
-
 						ALERT("Encrypting eCent and data!");
 						String encrypted_packet = encrypt(temporary_eCent, analyst_public_key);
-
+						// send encrypted eCent
 						ALERT("Sending Encrypted Packet");
-
+						
 						Message analysis;
 						String enCent = director.request(encrypted_packet);
 
@@ -273,6 +275,7 @@ public class Collector extends Node {
 						}else {
 							analysis = new Message(enCent);
 						}
+						
 						ALERT("Receiving response...");
 
 						switch (analysis.getFlagEnum()) {
@@ -304,7 +307,7 @@ public class Collector extends Node {
 					}
 					break;
 
-				case FAIL:
+				case FAIL:	// no analysts avail
 					ALERT("No analyst's availiable, returning ecent to wallet.");
 					eCentWallet.add(temporary_eCent);
 					break;
@@ -312,6 +315,7 @@ public class Collector extends Node {
 			director.close();
 
 		} catch(IOException err) {
+			// Error in sending
 			ALERT("Error: Connection to Director dropped.");
 			if(returnable){
 				ALERT("Ecent was not deposited, may be returned");
@@ -323,9 +327,9 @@ public class Collector extends Node {
 		return null;
 	}
 
-	// genStringForData checks the collector type and returns the correct string generator
+	// genStringForData checks the collector type and returns the correct string generator	
 	private String genStringForData() {
-
+	
 		if (collectorType.equals("DNA"))
 			return genDNA();
 		if (collectorType.equals("NUM"))
@@ -334,9 +338,9 @@ public class Collector extends Node {
 			return genCorruptedString();
 		}
 		return null;
-
+		
 	}
-
+	
 	// generate corrupted string
 	private String genCorruptedString() {
 		String corruptedString = "";
@@ -378,16 +382,16 @@ public class Collector extends Node {
 
 		while(!validNum){
 			Scanner scan = new Scanner(System.in);
-			input = scan.nextLine();
+			input = scan.nextLine();	
 			char[] checker = input.toCharArray();
 			validNum=true;
 			for (char c: checker){
 				if(!(c>=0&&c<=9)){
 					validNum=false;
 				}
-			}
-			ALERT("Not a string of numbers, allowed numbers: " + NUMALPHABET);
-		}
+			}	
+			ALERT("Not a string of numbers, allowed numbers: " + NUMALPHABET);	
+		}		
 		return input;
 
 	}
@@ -410,10 +414,10 @@ public class Collector extends Node {
 
 	// generate DNA string (isExplicit determines user input)
 	private String genDNA(){
-
+		
 		if (!isExplicit){
 			return genRandomDNA();
-		}
+		}	
 		Boolean validCharacters = false;
 
 		String input=null;
@@ -425,7 +429,7 @@ public class Collector extends Node {
 		while(!validCharacters){
 			ALERT("WHAT");
 			Scanner scan = new Scanner(System.in);
-			input = scan.nextLine();
+			input = scan.nextLine();	
 			char[] checker = input.toCharArray();
 			for (char c: checker){
 				validCharacters = ((c=='g') || (c=='d') || (c=='b') || (c=='a') || (c=='c') || (c=='-'));
@@ -433,12 +437,12 @@ public class Collector extends Node {
 			//checks to make sure input string is valid
 			if (!validCharacters){
 				System.out.println("Not a valid DNA character. Allowable characters are " + ALPHABET);
-			}
+			}		
 			if (!input.contains("-" )){
 				System.out.println("Incorrect format. Correct format is: Pattern-String");
 				validCharacters=false;
 			}
-		}
+		}		
 		return input;
 	}
 
